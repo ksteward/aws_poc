@@ -5,11 +5,10 @@
 # runs Pig task to analyse the data.
 # author:  Keith Steward
 # date:  2015-05-28
-echo "" >>$LLOG
-echo "Starting $0 at `date`..." >>$LLOG
+
 
 # Vars:
-CLUST_NAME='omniture3'
+CLUST_NAME='omniture4'
 NUM_MASTER=1
 NUM_CORE=4
 KEYNAME=test-key-1
@@ -22,11 +21,13 @@ OUTPUTDATA=$BUCKET/outputdata
 SCRIPTS=$BUCKET/scripts
 REFINESCRIPT=$SCRIPTS/refinelog.pig
 HIVESCRIPT1=$SCRIPTS/hiveddl.sql
-LOCAL=/Users/stewardk
-LDATA=$LOCAL/Data/Omniture/data
+LOCAL=/tmp
+LDATA=$LOCAL/data      # symlink the /tmp/data -> to actual location
 LSCRIPTS=$LOCAL/Data/Omniture/data
 TAGS=project=omniture_analyze
 
+echo "" >>$LLOG
+echo "Starting $0 at `date`..." >>$LLOG
 echo "using data from $INPUTDATA, scripts from $SCRIPTS, output to $OUTPUTDATA" >>$LLOG
 
 # sync files to S3...
