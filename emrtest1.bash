@@ -8,7 +8,7 @@
 
 
 # Vars:
-CLUST_NAME='omniture4'
+CLUST_NAME='omniture5'
 NUM_MASTER=1
 NUM_CORE=4
 KEYNAME=test-key-1
@@ -22,8 +22,8 @@ SCRIPTS=$BUCKET/scripts
 REFINESCRIPT=$SCRIPTS/refinelog.pig
 HIVESCRIPT1=$SCRIPTS/hiveddl.sql
 LOCAL=/tmp
-LDATA=$LOCAL/data      # symlink the /tmp/data -> to actual location
-LSCRIPTS=$LOCAL/Data/Omniture/data
+LDATA=$LOCAL/data  # symlink /tmp/data -> to location of data & scripts
+LSCRIPTS=$LDATA
 TAGS=project=omniture_analyze
 
 echo "" >>$LLOG
@@ -31,7 +31,10 @@ echo "Starting $0 at `date`..." >>$LLOG
 echo "using data from $INPUTDATA, scripts from $SCRIPTS, output to $OUTPUTDATA" >>$LLOG
 
 # sync files to S3...
-aws s3 sync $LDATA $INPUTDATA --exclude "*" --include "*.gz"   # data
+echo "uploading data to s3 ..." >>$LLOG
+aws s3 sync $LDATA $INPUTDATA/users --exclude "*" --include "users.tsv.gz"
+aws s3 sync $LDATA $INPUTDATA/products --exclude "*" --include "products.tsv.gz"
+aws s3 sync $LDATA $INPUTDATA/clickstreams --exclude "*" --include "Omniture.*.tsv.gz"
 aws s3 sync $LSCRIPTS $SCRIPTS --exclude "*" --include "*.pig" --include "*.sql"
 
 # clean out any old output
@@ -39,13 +42,13 @@ aws s3 rm $OUTPUTDATA/ --recursive
 
 # spin up the cluster:
 aws emr create-default-roles
-s="aws emr create-cluster --log-uri $LOGS --name "$CLUST_NAME" --ami-version 2.4 \
+s="aws emr create-cluster --log-uri $LOGS --name \"$CLUST_NAME\" --ami-version 2.4 \
     --applications Name=Hive Name=Pig \
     --use-default-roles --ec2-attributes KeyName=\"$KEYNAME\" \
     --instance-groups InstanceGroupType=MASTER,InstanceCount=$NUM_MASTER,InstanceType=m3.xlarge \
     InstanceGroupType=CORE,InstanceCount=$NUM_CORE,InstanceType=m3.xlarge \
-    --steps Type=PIG,Name=RefineLog,ActionOnFailure=CONTINUE,Args=[-f,$REFINESCRIPT,-p,INPUT=$INPUTDATA,-p,OUTPUT=$OUTPUTDATA] Type=HIVE,Name=HiveDDL,ActionOnFailure=CONTINUE,Args=[-f,$HIVESCRIPT1,-d,INPUT=$INPUTDATA,-d,OUTPUT=$OUTPUTDATA] \
+    --steps Type=HIVE,Name=HiveDDL,ActionOnFailure=CONTINUE,Args=[-f,$HIVESCRIPT1,-d,INPUT=$INPUTDATA,-d,OUTPUT=$OUTPUTDATA] \
     --tags $TAGS"
 
-echo "script invoked: $s" >>$LLOG
-exec $s
+echo "invoking: $s" >>$LLOG
+exec $s  
