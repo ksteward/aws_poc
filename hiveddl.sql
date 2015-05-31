@@ -33,6 +33,7 @@ OVERWRITE INTO TABLE omniturelogs;
 LOAD DATA INPATH 's3://kls-omniture/inputdata/Omniture.4.tsv.gz'
 OVERWRITE INTO TABLE omniturelogs;
 LOAD DATA INPATH 's3://kls-omniture/inputdata/Omniture.5.tsv.gz'
+OVERWRITE INTO TABLE omniturelogs;
 
 CREATE VIEW omniture AS 
 SELECT
@@ -45,6 +46,7 @@ col_51 country,
 col_53 `state`
 from omniturelogs;
 
+-- join across clicks, users, products
 create table webloganalytics as
 select 
         to_date(o.ts) logdate,
@@ -56,9 +58,16 @@ select
         p.category,
         CAST(datediff(
         from_unixtime( unix_timestamp() ),
-                from_unixtime( unix_timestamp(d.birth_dt, 'dd-MMM-yy'))) / 365  AS INT) age,
+        from_unixtime( unix_timestamp(d.birth_dt, 'dd-MMM-yy'))) / 365  AS INT) age,
         d.gender_cd gender
 from 
         omniture o 
         left outer join products p on o.url = p.url 
         left outer join users d on o.swid = concat('{', d.swid , '}');
+
+-- send the data to S3 ...
+create table s3
+(logdate STRING, url STRING, ip STRING, city STRING, state STRING, country STRING, category STRING, aged INT, gender STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION 's3://kls-omniture/outputdata/';
+INSERT OVERWRITE TABLE s3 SELECT * FROM webloganalytics;
