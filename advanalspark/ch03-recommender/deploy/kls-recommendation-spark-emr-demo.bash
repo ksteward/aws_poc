@@ -46,7 +46,6 @@ msg="Launching Spark cluster $CLUSTNAME in region $AWS_REGION with $TOTALCORES c
 echo $msg
 echo $msg >>runs.log
 aws emr create-default-roles
-cmd=<<EOC
 aws emr create-cluster --name "$NAME" --ami-version $AMIVERSION \
   --applications Name=Spark,Args=["-x"] \
   --ec2-attributes KeyName=$KEYPAIR --log-uri $LOGSURI --instance-groups \
@@ -54,11 +53,6 @@ aws emr create-cluster --name "$NAME" --ami-version $AMIVERSION \
    Name=Core,InstanceGroupType=CORE,InstanceType=$INST_TYPE,InstanceCount=$NUMCORENODES \
    Name=Task,InstanceGroupType=TASK,InstanceType=$INST_TYPE,InstanceCount=$NUMTASKNODES,BidPrice=$BIDPRICE \
   --steps Type="Spark",Name="Recommender",ActionOnFailure=CONTINUE,Args=["--deploy-mode","cluster","--class","com.cloudera.datascience.recommender.RunRecommender","$BUCKETS3/ch03-recommender-1.0.1-jar-with-dependencies.jar"]
-EOC
-echo "executing:"
-echo " $cmd"
-RESULT=`$cmd`
-echo $RESULT
 
 
 #"--conf","spark.dynamicAllocation.enabled=true","--conf","spark.executor.memory=2G","--conf","spark.executor.cores=10",
