@@ -21,16 +21,15 @@ BUCKETS3=s3://$BUCKETNAME
 BUCKETURL="https://s3.amazonaws.com/$BUCKETNAME"
 LOGSURI=$BUCKETS3/logs
 KEYPAIR=test-key-1
-AUTH="-k $KEYPAIR -i $KEYPAIR.pem"
-OPTS="--copy-aws-credentials --region=$AWS_REGION --zone=$AWS_ZONE $AUTH -t $INST_TYPE  --no-ganglia"
 JARFILE=ch03-recommender-1.0.1-jar-with-dependencies.jar
 CLASS=com.cloudera.datascience.recommender.RunRecommender
+POLLSECONDS=20
 
 echo ""
 echo "Music Recommendation System Demo"
 echo "---------------------------------"
 
-# package our scala code
+# build and package our Scala code if there was a change
 cd ..
 echo "packaging application code ..."
 mvn -q package
@@ -38,13 +37,11 @@ mvn -q package
 # sync it to s3
 echo "syncing application code to s3 ..."
 aws s3 sync target/ $BUCKETS3/ --exclude "*" --include "*.jar" --quiet
-aws s3 cp deploy/sparkconfig.json $BUCKETS3/
 
 # create the cluster
-cd -
-msg="Launching Spark cluster $CLUSTNAME in region $AWS_REGION with $TOTALCORES cores ..."
-echo $msg
-echo $msg >>runs.log
+cd - >/dev/null
+msg="Launching Spark cluster $CLUSTNAME with Recommendation System in region $AWS_REGION with $TOTALCORES cores ..."
+echo $msg | tee runs.log
 aws emr create-default-roles
 aws emr create-cluster --name "$NAME" --ami-version $AMIVERSION \
   --applications Name=Spark,Args=["-x"] \
@@ -52,12 +49,22 @@ aws emr create-cluster --name "$NAME" --ami-version $AMIVERSION \
    Name=Master,InstanceGroupType=MASTER,InstanceType=m3.xlarge,InstanceCount=1 \
    Name=Core,InstanceGroupType=CORE,InstanceType=$INST_TYPE,InstanceCount=$NUMCORENODES \
    Name=Task,InstanceGroupType=TASK,InstanceType=$INST_TYPE,InstanceCount=$NUMTASKNODES,BidPrice=$BIDPRICE \
-  --steps Type="Spark",Name="Recommender",ActionOnFailure=CONTINUE,Args=["--deploy-mode","cluster","--class","com.cloudera.datascience.recommender.RunRecommender","$BUCKETS3/ch03-recommender-1.0.1-jar-with-dependencies.jar"]
+  --steps Type="Spark",Name="Recommender",ActionOnFailure=CONTINUE,Args=["--deploy-mode","cluster","--class","$CLASS","$BUCKETS3/$JARFILE"] | tee cluster_id
+
+# wait for cluster to finish running the step
+id=`awk '/ClusterId/{ print $2 }' cluster_id | sed 's/"//g'`
+echo "waiting for completion of analysis of cluster $id... check Web Console."
+while true; do
+    resp="`aws emr describe-cluster --cluster-id $id`"
+    if [ "`echo \"$resp\" | grep 'Waiting after step completed'`" ]; then
+       break
+    fi
+    sleep $POLLSECONDS
+done
+
+# terminate the cluster
+echo "Processing & analysis has completed.  Terminating cluster ..."
+aws emr terminate-clusters --cluster-ids $id
+echo "cluster terminated."
 
 
-#"--conf","spark.dynamicAllocation.enabled=true","--conf","spark.executor.memory=2G","--conf","spark.executor.cores=10",
-
-
-#"--total-executor-cores","$TOTALCORES",
-
-# terminate the cluster ?
